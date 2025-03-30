@@ -26,3 +26,4 @@ A simple and user-friendly Minecraft launcher.
 
 Enter your username on first launch and click the "Play" button.
 Access settings via the gear icon in the top right corner.
+You can find user settings in "appdata/roaming/.minecraft/novasettings.json"
