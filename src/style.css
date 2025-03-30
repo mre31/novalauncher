@@ -1,0 +1,136 @@
+/* Nova Launcher - Apple Tarzı Karanlık Tema */
+
+QMainWindow {
+    background-color: #1e1e1e;
+    color: #f5f5f7;
+}
+
+QWidget {
+    font-family: "SF Pro Display", "Segoe UI", "Arial", sans-serif;
+    font-size: 14px;
+}
+
+QLabel {
+    color: #f5f5f7;
+}
+
+QGroupBox {
+    background-color: #2d2d2d;
+    border-radius: 10px;
+    border: 1px solid #3d3d3d;
+    margin-top: 1.5ex;
+    padding: 15px;
+    font-weight: 500;
+    color: #f5f5f7;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top center;
+    padding: 0 5px;
+    color: #f5f5f7;
+    font-weight: 600;
+}
+
+QPushButton {
+    background-color: #0071e3;
+    border: none;
+    border-radius: 8px;
+    color: white;
+    padding: 8px 16px;
+    font-weight: 500;
+}
+
+QPushButton:hover {
+    background-color: #0077ed;
+}
+
+QPushButton:pressed {
+    background-color: #005bbf;
+}
+
+QComboBox {
+    background-color: #3d3d3d;
+    border: 1px solid #545454;
+    border-radius: 8px;
+    color: #f5f5f7;
+    padding: 8px;
+    min-width: 6em;
+}
+
+QComboBox:hover {
+    border: 1px solid #0071e3;
+}
+
+QComboBox::drop-down {
+    border: none;
+    width: 20px;
+}
+
+QComboBox QAbstractItemView {
+    border: 1px solid #3d3d3d;
+    background-color: #2d2d2d;
+    color: #f5f5f7;
+    selection-background-color: #424242;
+}
+
+QProgressBar {
+    background-color: #3d3d3d;
+    border: 1px solid #545454;
+    border-radius: 8px;
+    color: #f5f5f7;
+    text-align: center;
+    height: 8px;
+}
+
+QProgressBar::chunk {
+    background-color: #0071e3;
+    border-radius: 7px;
+}
+
+/* Özel Butonlar */
+#playButton {
+    background-color: #34c759;
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+    padding: 10px 20px;
+}
+
+#playButton:hover {
+    background-color: #30b751;
+}
+
+#installButton {
+    background-color: #5e5ce6;
+    color: white;
+    font-weight: 500;
+    padding: 10px 20px;
+}
+
+#installButton:hover {
+    background-color: #5452d6;
+}
+
+/* Başlık */
+#titleLabel {
+    font-family: "SF Pro Display", "Segoe UI", "Arial", sans-serif;
+    font-size: 28px;
+    font-weight: bold;
+    color: #f5f5f7;
+    padding: 15px;
+}
+
+/* Yardımcı Metin */
+QLabel[style="info"] {
+    color: #a9a9a9;
+    font-size: 12px;
+    font-style: italic;
+}
+
+/* Shadow Effect */
+QGroupBox {
+    background-color: #2d2d2d;
+    border-radius: 10px;
+    border: 1px solid #3d3d3d;
+} 
