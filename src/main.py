@@ -3,17 +3,21 @@ import os
 import json
 import requests
 import minecraft_launcher_lib as mclib
+import minecraft_launcher_lib.fabric as fabric
+import minecraft_launcher_lib.forge as forge
 import subprocess
 import uuid
 import hashlib
 import time
 import base64
 import math
+import traceback
+import glob
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                            QLabel, QPushButton, QComboBox, QProgressBar, 
                            QMessageBox, QFileDialog, QGroupBox, QHBoxLayout,
                            QDialog, QSpinBox, QSlider, QTabWidget, QInputDialog,
-                           QFrame, QLineEdit)
+                           QFrame, QLineEdit, QCheckBox)
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QSize, QTimer, QByteArray
 from PyQt5.QtGui import QIcon, QPixmap, QFont, QPainter, QColor, QPainterPath
 
@@ -54,35 +58,132 @@ class MinecraftInstallThread(QThread):
     progress_signal = pyqtSignal(int, str)
     complete_signal = pyqtSignal(bool, str)
     
-    def __init__(self, minecraft_dir, version):
+    def __init__(self, minecraft_dir, version, version_type, forge_version_string=None):
         super().__init__()
         self.minecraft_directory = minecraft_dir
         self.version = version
+        self.version_type = version_type
+        self.forge_version_string = forge_version_string
+        # Initialize status and progress trackers
+        self._current_status = "Starting installation..."
+        self._current_progress = 0
         
-    def callback(self, value, max_value, status):
-        """Callback for download progress"""
-        if max_value > 0:
-            percentage = int((value / max_value) * 100)
-        else:
-            percentage = 0
-        self.progress_signal.emit(percentage, status)
+    def set_status(self, status):
+        """Callback for status updates"""
+        self._current_status = status
+        # Emit the combined signal
+        self.progress_signal.emit(self._current_progress, self._current_status)
+
+    def set_progress(self, value, max_value=None):
+        """Callback for progress updates"""
+        # Only calculate percentage if max_value is provided and greater than 0
+        if max_value is not None and max_value > 0: 
+            self._current_progress = int((value / max_value) * 100)
+        # If max_value is not provided or zero, we don't update the percentage
+        # but we still emit the signal to potentially update the status text
+        
+        # Emit the combined signal
+        self.progress_signal.emit(self._current_progress, self._current_status)
         
     def run(self):
-        """Install Minecraft version"""
+        """Install Minecraft version (Vanilla or Fabric)"""
+        callback_dict = {
+            "setStatus": self.set_status,
+            "setProgress": self.set_progress
+        }
+        
+        base_vanilla_id = self.version # Default to self.version for vanilla
+        if self.version_type == "fabric":
+            try:
+                # Extract base vanilla ID like "1.20.1" from fabric ID "fabric-loader-x.y.z-1.20.1"
+                base_vanilla_id = self.version.split('-')[-1]
+            except IndexError:
+                 self.complete_signal.emit(False, f"Invalid Fabric version ID format: {self.version}")
+                 return
+
         try:
+            # === Step 1: Install Vanilla Version (Always required) ===
+            self.set_status(f"Installing Vanilla {base_vanilla_id}...")
             if not os.path.exists(self.minecraft_directory):
                 os.makedirs(self.minecraft_directory)
                 
             mclib.install.install_minecraft_version(
-                self.version, 
+                base_vanilla_id, 
                 self.minecraft_directory, 
-                callback=self.callback
+                callback=callback_dict
             )
-            
-            self.complete_signal.emit(True, f"Minecraft {self.version} installed successfully.")
+            self.set_status(f"Vanilla {base_vanilla_id} installed.")
+
+            # === Step 2: Install Fabric (If requested) ===
+            if self.version_type == "fabric":
+                self.set_status(f"Installing Fabric for {base_vanilla_id}...")
+                try:
+                    mclib.fabric.install_fabric(
+                        base_vanilla_id, # Use base vanilla ID here
+                        self.minecraft_directory,
+                        callback=callback_dict,
+                        # Optional: Specify loader version if needed, otherwise uses latest
+                        # loader_version=self.version.split('-')[2] # Extract loader from ID if needed
+                    )
+                    self.set_status(f"Fabric for {base_vanilla_id} installed.")
+                except Exception as fabric_exc:
+                    # Provide a more specific error if Fabric install fails after Vanilla success
+                    error_message = f"Vanilla {base_vanilla_id} installed, but Fabric failed: {str(fabric_exc)}"
+                    print("--- FABRIC INSTALLATION ERROR ---")
+                    print(error_message)
+                    print("Traceback:")
+                    traceback.print_exc()
+                    print("---------------------------------")
+                    self.complete_signal.emit(False, error_message)
+                    return # Stop here if fabric install failed
+
+            # === Step 3: Install Forge (If requested) ===
+            elif self.version_type == "forge":
+                if not self.forge_version_string:
+                    self.complete_signal.emit(False, f"Missing Forge version info for {base_vanilla_id}")
+                    return
+
+                self.set_status(f"Installing Forge for {base_vanilla_id} ({self.forge_version_string})...")
+                try:
+                    # Check if this specific forge version is supported for auto-install
+                    if not forge.supports_automatic_install(self.forge_version_string):
+                        raise Exception(f"Automatic installation not supported for Forge {self.forge_version_string}. Please install manually.")
+
+                    forge.install_forge_version(
+                        self.forge_version_string, 
+                        self.minecraft_directory,
+                        callback=callback_dict
+                    )
+                    self.set_status(f"Forge for {base_vanilla_id} installed.")
+                except Exception as forge_exc:
+                    # Provide a more specific error if Forge install fails
+                    error_message = f"Vanilla {base_vanilla_id} installed, but Forge failed: {str(forge_exc)}"
+                    print("--- FORGE INSTALLATION ERROR ---")
+                    print(error_message)
+                    print("Traceback:")
+                    traceback.print_exc()
+                    print("--------------------------------")
+                    self.complete_signal.emit(False, error_message)
+                    return # Stop here if forge install failed
+
+            # === Completion ===
+            success_message = f"Minecraft {self.version} installed successfully."
+            if self.version_type == "fabric":
+                 success_message = f"Fabric {base_vanilla_id} ({self.version}) installed successfully."
+            elif self.version_type == "forge":
+                 # Note: self.version is base ID here, actual launch ID determined later
+                 success_message = f"Forge {base_vanilla_id} installed successfully."
+                 
+            self.complete_signal.emit(True, success_message)
+
         except Exception as e:
-            error_message = f"Error installing Minecraft: {str(e)}"
+            # General installation error (likely during Vanilla install)
+            error_message = f"Error installing {self.version}: {str(e)}"
+            print("--- MINECRAFT INSTALLATION ERROR ---")
             print(error_message)
+            print("Traceback:")
+            traceback.print_exc()
+            print("------------------------------------")
             self.complete_signal.emit(False, error_message)
 
 class MinecraftLauncherThread(QThread):
@@ -414,9 +515,21 @@ class SettingsDialog(QDialog):
         username_layout.addWidget(username_label)
         username_layout.addWidget(self.username_combo)
         
+        # Version Display Options
+        version_options_group = QGroupBox("Version Display")
+        version_options_layout = QVBoxLayout()
+        self.fabric_checkbox = QCheckBox("Show Fabric Versions")
+        self.fabric_checkbox.setChecked(self.parent.show_fabric)
+        self.forge_checkbox = QCheckBox("Show Forge Versions")
+        self.forge_checkbox.setChecked(self.parent.show_forge)
+        version_options_layout.addWidget(self.fabric_checkbox)
+        version_options_layout.addWidget(self.forge_checkbox)
+        version_options_group.setLayout(version_options_layout)
+
         # Add widgets to general tab
         general_layout.addWidget(dir_widget)
         general_layout.addWidget(username_widget)
+        general_layout.addWidget(version_options_group) # Add the group box
         general_layout.addStretch()
         general_tab.setLayout(general_layout)
         
@@ -439,8 +552,14 @@ class SettingsDialog(QDialog):
         java_path_button.setMaximumWidth(80)
         java_path_button.clicked.connect(self.select_java_path)
         
+        # Add Reset button
+        java_reset_button = QPushButton("Reset")
+        java_reset_button.setMaximumWidth(80)
+        java_reset_button.clicked.connect(self.reset_java_path)
+        
         java_layout_row.addWidget(java_label)
         java_layout_row.addWidget(self.java_path_label, 1)
+        java_layout_row.addWidget(java_reset_button)
         java_layout_row.addWidget(java_path_button)
         
         # RAM allocation
@@ -529,18 +648,34 @@ class SettingsDialog(QDialog):
         if java_path:
             self.java_path_label.setText(java_path)
     
+    def reset_java_path(self):
+        """Reset Java path to system default"""
+        self.java_path_label.setText("System default")
+    
     def save_settings(self):
         # Update parent settings
         self.parent.minecraft_directory = self.directory_label.text()
         self.parent.username = self.username_combo.currentText()
-        self.parent.java_path = self.java_path_label.text()
+        
+        # Set java_path to empty string if label is "System default"
+        java_path_text = self.java_path_label.text()
+        if java_path_text == "System default":
+            self.parent.java_path = ""
+        else:
+            self.parent.java_path = java_path_text
+            
         self.parent.ram_allocation = self.ram_spin.value() * 1024
+        self.parent.show_fabric = self.fabric_checkbox.isChecked() # Save checkbox state
+        self.parent.show_forge = self.forge_checkbox.isChecked() # Save checkbox state
         
         # Update UI elements in the main window
         self.parent.user_label.setText(self.parent.username)
         
         # Save settings to file
         self.parent.save_settings()
+        
+        # Reload versions in the main window to reflect changes
+        self.parent.load_versions()
         
         self.accept()
 
@@ -555,8 +690,10 @@ class NovaLauncher(QMainWindow):
         self.minecraft_directory = self.settings.get("minecraft_directory", DEFAULT_MINECRAFT_DIR)
         self.username = self.settings.get("username", "")
         self.selected_version = self.settings.get("last_used_version")
-        self.ram_allocation = self.settings.get("ram_allocation", 2048)
-        self.java_path = self.settings.get("java_path", "")  # Java path setting
+        self.ram_allocation = self.settings.get("ram_allocation", DEFAULT_SETTINGS["ram_allocation"])
+        self.java_path = self.settings.get("java_path", DEFAULT_SETTINGS["java_path"])
+        self.show_fabric = self.settings.get("show_fabric", DEFAULT_SETTINGS["show_fabric"])
+        self.show_forge = self.settings.get("show_forge", DEFAULT_SETTINGS["show_forge"])
         
         # Request username if not set
         if not self.username:
@@ -883,6 +1020,7 @@ class NovaLauncher(QMainWindow):
         self.version_thread.start()
     
     def update_versions(self, versions):
+        current_selection = self.version_combo.currentText() # Keep track of current selection
         self.version_combo.clear()
         
         if not versions:
@@ -896,32 +1034,106 @@ class NovaLauncher(QMainWindow):
         
         self.version_retries = 0  # Reset retry counter on success
         release_versions = []
+        processed_versions = [] # Store tuples of (display_name, version_id, type)
         
+        # Get vanilla release versions first
         for version in versions:
             if version.get("type") == "release":
                 release_versions.append(version)
         
-        # En son sürüm en başta olacak şekilde sırala
+        # Sort releases by release time, newest first
         release_versions.sort(key=lambda x: x.get("releaseTime", ""), reverse=True)
-        
+
+        # Add Vanilla and Fabric versions
         for version in release_versions:
-            self.version_combo.addItem(version.get("id"))
+            vanilla_id = version.get("id")
+            if not vanilla_id: continue
+
+            # Add Vanilla entry
+            processed_versions.append((vanilla_id, vanilla_id, "vanilla"))
+
+            # Add Fabric entry (without calling get_latest_loader_version)
+            if self.show_fabric: # Check setting before adding
+                fabric_display_name = f"Fabric {vanilla_id}"
+                # Store BASE vanilla ID and type "fabric" for later use
+                processed_versions.append((fabric_display_name, vanilla_id, "fabric"))
+
+            # Try to get and add Forge entry
+            if self.show_forge: # Check setting before adding
+                try:
+                    forge_version_str = forge.find_forge_version(vanilla_id)
+                    if forge_version_str:
+                        forge_display_name = f"Forge {vanilla_id}"
+                        # Store base vanilla ID, type 'forge', and the specific forge version string
+                        processed_versions.append((forge_display_name, vanilla_id, "forge", forge_version_str))
+                except Exception as e:
+                    # print(f"Could not get Forge version for {vanilla_id}: {e}") # Optional debug
+                    pass
+
+        # Populate the combo box
+        for item_tuple in processed_versions:
+            display_name = item_tuple[0]
+            version_id_or_base_id = item_tuple[1]
+            version_type = item_tuple[2]
+            user_data = {"id": version_id_or_base_id, "type": version_type}
+            # Add forge_version if it exists (for forge types)
+            if version_type == "forge" and len(item_tuple) > 3:
+                user_data["forge_version"] = item_tuple[3]
+            
+            self.version_combo.addItem(display_name, userData=user_data)
         
-        # İlk sürümü (en son sürümü) seç, eğer daha önce seçilmiş bir sürüm yoksa
-        if not self.selected_version and self.version_combo.count() > 0:
-            self.selected_version = self.version_combo.itemText(0)
-            self.version_combo.setCurrentIndex(0)
-        # Eğer daha önce seçilmiş bir sürüm varsa, onu seç
+        # Restore previous selection if possible
+        # Find based on DISPLAY NAME first
+        index = self.version_combo.findText(current_selection)
+        if index >= 0:
+            self.version_combo.setCurrentIndex(index)
+        # Select latest version if no previous selection or previous selection is gone
+        elif not self.selected_version and self.version_combo.count() > 0:
+             self.version_combo.setCurrentIndex(0)
+             self.update_selected_version(0) # Trigger update
+        # If there was a selected version saved, try to find it by ID
         elif self.selected_version:
-            index = self.version_combo.findText(self.selected_version)
-            if index >= 0:
-                self.version_combo.setCurrentIndex(index)
+            found_index = -1
+            for i in range(self.version_combo.count()):
+                item_data = self.version_combo.itemData(i)
+                # Check against base ID for Fabric/Forge, full ID for Vanilla
+                stored_id_in_settings = self.settings.get("last_used_version") # This might be base or full
+                current_item_id = item_data.get("id") # Base for Fabric/Forge, Full for Vanilla
+                current_item_type = item_data.get("type")
+                
+                # Attempt to match based on what was saved
+                # If saved ID matches current item ID directly (works for Vanilla, or if base ID was saved for F/F)
+                if stored_id_in_settings == current_item_id:
+                     found_index = i
+                     break
+                # If saved ID might be a full Fabric/Forge launch ID, check if its base matches current item's base ID
+                elif stored_id_in_settings and (current_item_type == "fabric" or current_item_type == "forge"):
+                     try:
+                         # Attempt to extract base ID from potentially full saved ID
+                         base_from_saved = stored_id_in_settings.split('-')[-1]
+                         if base_from_saved == current_item_id:
+                             found_index = i
+                             break
+                     except:
+                         pass # Ignore potential errors splitting non-standard IDs
+
+            if found_index >= 0:
+                self.version_combo.setCurrentIndex(found_index)
+            elif self.version_combo.count() > 0: # Fallback to first item
+                 self.version_combo.setCurrentIndex(0)
+                 self.update_selected_version(0) # Trigger update
 
     def update_selected_version(self, index):
         if index >= 0:
-            self.selected_version = self.version_combo.currentText()
-            # Save settings
-            self.save_settings()
+            item_data = self.version_combo.itemData(index)
+            if item_data:
+                # Save the BASE ID for Fabric/Forge, or the full ID for Vanilla
+                # This might cause issues if multiple Fabric/Forge loaders exist for the same base
+                # but simplifies restoring selection for now.
+                # Launch logic will find the specific installed version anyway.
+                self.selected_version = item_data.get("id")
+                # Save settings
+                self.save_settings()
     
     def open_minecraft_directory(self):
         if not os.path.exists(self.minecraft_directory):
@@ -938,63 +1150,90 @@ class NovaLauncher(QMainWindow):
         except Exception as e:
             QMessageBox.warning(self, "Error", f"Could not open directory: {str(e)}")
     
-    def check_and_install_minecraft(self, version):
-        """Check if version is installed and install if needed"""
-        version_dir = os.path.join(self.minecraft_directory, "versions", version)
-        jar_file = os.path.join(version_dir, f"{version}.jar")
+    def check_and_install_minecraft(self, version_data):
+        """Check if version is installed and install if needed. version_data is a dict {'id': '...', 'type': '...'}"""
+        if not version_data:
+            return False # Should not happen
+
+        version_id = version_data.get("id") # This is BASE ID for Fabric
+        version_type = version_data.get("type")
+        display_name = self.version_combo.currentText() # For messages
+
+        is_installed = False
+        if version_type == "fabric":
+            # For Fabric, check if base vanilla is installed AND *any* fabric loader exists for it
+            base_vanilla_id = version_id # It's already the base ID
+            vanilla_version_dir = os.path.join(self.minecraft_directory, "versions", base_vanilla_id)
+            vanilla_jar_file = os.path.join(vanilla_version_dir, f"{base_vanilla_id}.jar")
+            
+            # Check if base vanilla jar exists
+            if os.path.exists(vanilla_jar_file):
+                # Check if *any* directory matching "fabric-loader-*-(base_vanilla_id)" exists
+                fabric_pattern = os.path.join(self.minecraft_directory, "versions", f"fabric-loader*-{base_vanilla_id}")
+                matching_fabric_dirs = glob.glob(fabric_pattern)
+                is_installed = bool(matching_fabric_dirs) # True if any matching directory found
+            else:
+                 is_installed = False # Vanilla base not even installed
+
+        elif version_type == "forge":
+            # For Forge, check if base vanilla is installed AND *any* forge version exists for it
+            base_vanilla_id = version_id # It's already the base ID
+            vanilla_version_dir = os.path.join(self.minecraft_directory, "versions", base_vanilla_id)
+            vanilla_jar_file = os.path.join(vanilla_version_dir, f"{base_vanilla_id}.jar")
+
+            if os.path.exists(vanilla_jar_file):
+                # Check if *any* directory matching pattern like "*forge*-(base_vanilla_id)" exists
+                # Forge naming can be inconsistent (e.g., 1.12.2-forge-14..., 1.16.5-forge-...)
+                forge_pattern = os.path.join(self.minecraft_directory, "versions", f"*{base_vanilla_id}*forge*") # More flexible pattern
+                matching_forge_dirs = glob.glob(forge_pattern)
+                is_installed = bool(matching_forge_dirs)
+            else:
+                is_installed = False
+
+        else: # Vanilla
+            version_dir = os.path.join(self.minecraft_directory, "versions", version_id)
+            jar_file = os.path.join(version_dir, f"{version_id}.jar")
+            is_installed = os.path.exists(jar_file)
         
-        if os.path.exists(jar_file):
+        if is_installed:
             return True  # Already installed
         
         # Need to install
         reply = QMessageBox.question(
             self, 
             "Minecraft Installation",
-            f"Minecraft {version} is not installed. Do you want to install it now?",
+            f"{display_name} is not installed. Do you want to install it now?",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.Yes
         )
         
         if reply == QMessageBox.Yes:
-            self.show_loading(is_launching=False, percentage=0)  # DOWNLOADING %0 göster
-            self.install_minecraft(version)
+            self.show_loading(is_launching=False, percentage=0)  # Show loading screen
+            self.install_minecraft(version_data) # Pass the whole data dict
             return False  # Installation in progress
         else:
             return False  # User declined installation
     
-    def install_minecraft(self, version=None):
-        if not version:
-            version = self.selected_version
+    def install_minecraft(self, version_data):
+        # version_data is the dict like {'id': '...', 'type': '...'}
+        if not version_data:
+            QMessageBox.warning(self, "Warning", "Invalid version selected!")
+            return
             
-        if not version:
-            QMessageBox.warning(self, "Warning", "Please select a Minecraft version!")
+        version_id = version_data.get("id")
+        version_type = version_data.get("type")
+        display_name = self.version_combo.currentText() # For display
+
+        if not version_id or not version_type:
+            QMessageBox.warning(self, "Warning", "Version information incomplete!")
             return
         
-        # Buton içeriği için basit metin ve spinner
-        self.play_button.setText("")  # Metni temizle
+        # Update button text for installation
+        self.play_button.setText(f"INSTALLING {display_name}...")
         self.play_button.setEnabled(False)
-        
-        # QHBoxLayout kullanımını kaldırıp, doğrudan buton içine metin yazmayı kullanacağız
-        install_label = QLabel(f"INSTALLING {version}")
-        install_label.setAlignment(Qt.AlignCenter)
-        install_label.setStyleSheet("""
-            color: white;
-            font-weight: bold;
-            font-size: 16px;
-        """)
-        
-        # Basit bir şekilde metni ayarla, spinner kullanmadan
-        self.play_button.setText(f"INSTALLING {version}")
-        
-        # Spinner animasyonu için timer
-        self.play_spinner_angle = 0
-        self.play_spinner_timer = QTimer()
-        self.play_spinner_timer.timeout.connect(self.update_play_button_text)
-        self.play_spinner_timer.start(300)
-        
         self.play_button.setStyleSheet("""
             #playButton {
-                background-color: #6c6c6c;
+                background-color: #6c6c6c; /* Grey out */
                 color: white;
                 border: none;
                 font-weight: bold;
@@ -1003,10 +1242,9 @@ class NovaLauncher(QMainWindow):
             }
         """)
         
-        # Installation process
-        self.progress_label.setText("Installing Minecraft...")
-        
-        self.install_thread = MinecraftInstallThread(self.minecraft_directory, version)
+        # Start installation thread with version id and type
+        forge_version_string = version_data.get("forge_version") # Get forge version if exists
+        self.install_thread = MinecraftInstallThread(self.minecraft_directory, version_id, version_type, forge_version_string)
         self.install_thread.progress_signal.connect(self.update_progress)
         self.install_thread.complete_signal.connect(self.installation_complete)
         self.install_thread.start()
@@ -1147,32 +1385,112 @@ class NovaLauncher(QMainWindow):
 
     def play_minecraft(self):
         """Unified method to play or install Minecraft"""
-        if not self.selected_version:
+        current_index = self.version_combo.currentIndex()
+        if current_index < 0:
             QMessageBox.warning(self, "Warning", "Please select a Minecraft version!")
+            return
+            
+        version_data = self.version_combo.itemData(current_index)
+        if not version_data or not version_data.get("id"):
+            QMessageBox.warning(self, "Warning", "Invalid version data selected!")
             return
         
         if not self.username:
             QMessageBox.warning(self, "Warning", "Please enter your username!")
             return
         
-        # Ayarları kaydet
+        # Ayarları kaydet (selected_version ID'sini zaten güncelledik)
         self.save_settings()
         
-        # Sürüm kurulu değilse kur
-        if self.check_and_install_minecraft(self.selected_version):
+        # Sürüm kurulu değilse kur (version_data'yı ilet)
+        if self.check_and_install_minecraft(version_data):
             # Kuruluysa doğrudan başlat
             self.show_loading(is_launching=True)  # LAUNCHING göster
             self.launch_minecraft()
     
     def launch_minecraft(self):
         """Launch Minecraft with current settings"""
-        # username = self.username_combo.currentText()  # Bu satırı kaldır
-        
-        # Launch Minecraft
+        current_index = self.version_combo.currentIndex()
+        if current_index < 0:
+            QMessageBox.critical(self, "Launch Error", "No version selected.")
+            self.hide_loading()
+            return
+            
+        version_data = self.version_combo.itemData(current_index)
+        if not version_data:
+             QMessageBox.critical(self, "Launch Error", "Invalid version data.")
+             self.hide_loading()
+             return
+
+        version_id_to_launch = version_data.get("id") # Base ID for Fabric, Full ID for Vanilla
+        version_type = version_data.get("type")
+
+        # If Fabric, find the exact installed version ID
+        if version_type == "fabric":
+            base_vanilla_id = version_id_to_launch # It's the base ID here
+            try:
+                installed_versions = mclib.utils.get_installed_versions(self.minecraft_directory)
+                found_fabric_id = None
+                # Look for an ID like "fabric-loader-<loader_version>-(base_vanilla_id)"
+                pattern = f"fabric-loader-"
+                for installed_ver in installed_versions:
+                    ver_id = installed_ver.get("id")
+                    if ver_id and ver_id.startswith(pattern) and ver_id.endswith(base_vanilla_id):
+                        found_fabric_id = ver_id
+                        break # Found the first match
+                
+                if not found_fabric_id:
+                    # This might happen if check_and_install failed silently or something is wrong
+                    QMessageBox.critical(self, "Launch Error", f"Could not find installed Fabric for {base_vanilla_id}. Please try installing it again.")
+                    self.hide_loading()
+                    return
+                
+                version_id_to_launch = found_fabric_id # Update to the full Fabric ID
+
+            except Exception as e:
+                 QMessageBox.critical(self, "Launch Error", f"Error finding installed Fabric version: {e}")
+                 self.hide_loading()
+                 return
+
+        # If Forge, find the exact installed launch ID
+        elif version_type == "forge":
+            base_vanilla_id = version_id_to_launch # It's the base ID here
+            try:
+                installed_versions = mclib.utils.get_installed_versions(self.minecraft_directory)
+                found_forge_id = None
+                # Look for an ID that contains both the base_vanilla_id and "forge"
+                # Order might vary (e.g., 1.12.2-forge-..., 1.16.5-forge-...)
+                for installed_ver in installed_versions:
+                    ver_id = installed_ver.get("id")
+                    if ver_id and base_vanilla_id in ver_id and "forge" in ver_id.lower():
+                        found_forge_id = ver_id
+                        # Maybe add preference for specific forge version if multiple found?
+                        # For now, take the first one found.
+                        break 
+                
+                if not found_forge_id:
+                    QMessageBox.critical(self, "Launch Error", f"Could not find installed Forge for {base_vanilla_id}. Please try installing it again.")
+                    self.hide_loading()
+                    return
+                
+                version_id_to_launch = found_forge_id # Update to the full Forge launch ID
+
+            except Exception as e:
+                 QMessageBox.critical(self, "Launch Error", f"Error finding installed Forge version: {e}")
+                 self.hide_loading()
+                 return
+
+        # Ensure we have a final version ID to launch
+        if not version_id_to_launch:
+             QMessageBox.critical(self, "Launch Error", "Could not determine version to launch.")
+             self.hide_loading()
+             return
+
+        # Launch Minecraft using the final determined version ID
         self.launch_thread = MinecraftLauncherThread(
             self.minecraft_directory,
-            self.selected_version,
-            self.username,  # Doğrudan self.username kullan
+            version_id_to_launch, # Use the determined ID
+            self.username,  
             self.ram_allocation,
             self.java_path
         )
@@ -1194,8 +1512,10 @@ class NovaLauncher(QMainWindow):
             "minecraft_directory": DEFAULT_MINECRAFT_DIR,
             "username": "",
             "last_used_version": None,
-            "ram_allocation": 2048,
-            "java_path": ""
+            "ram_allocation": DEFAULT_SETTINGS["ram_allocation"],
+            "java_path": DEFAULT_SETTINGS["java_path"],
+            "show_fabric": DEFAULT_SETTINGS["show_fabric"],
+            "show_forge": DEFAULT_SETTINGS["show_forge"]
         }
         
         try:
@@ -1215,7 +1535,9 @@ class NovaLauncher(QMainWindow):
             "username": self.username,
             "last_used_version": self.selected_version,
             "ram_allocation": self.ram_allocation,
-            "java_path": self.java_path
+            "java_path": self.java_path,
+            "show_fabric": self.show_fabric,
+            "show_forge": self.show_forge
         }
         
         try:

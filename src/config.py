@@ -29,7 +29,9 @@ DEFAULT_SETTINGS = {
     "username": "Player",
     "last_used_version": None,
     "ram_allocation": 2048,
-    "java_path": ""
+    "java_path": "",
+    "show_fabric": True,  # Fabric göster/gizle ayarı
+    "show_forge": True   # Forge göster/gizle ayarı
 }
 
 # Simgelerin konumu
