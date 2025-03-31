@@ -1,5 +1,3 @@
-/* Nova Launcher - Apple Tarzı Karanlık Tema */
-
 QMainWindow {
     background-color: #1e1e1e;
     color: #f5f5f7;
@@ -88,7 +86,6 @@ QProgressBar::chunk {
     border-radius: 7px;
 }
 
-/* Özel Butonlar */
 #playButton {
     background-color: #34c759;
     color: white;
@@ -112,7 +109,6 @@ QProgressBar::chunk {
     background-color: #5452d6;
 }
 
-/* Başlık */
 #titleLabel {
     font-family: "SF Pro Display", "Segoe UI", "Arial", sans-serif;
     font-size: 28px;
@@ -121,16 +117,14 @@ QProgressBar::chunk {
     padding: 15px;
 }
 
-/* Yardımcı Metin */
 QLabel[style="info"] {
     color: #a9a9a9;
     font-size: 12px;
     font-style: italic;
 }
 
-/* Shadow Effect */
 QGroupBox {
     background-color: #2d2d2d;
     border-radius: 10px;
     border: 1px solid #3d3d3d;
-} 
+}
