@@ -627,6 +627,8 @@ class NovaLauncher(QMainWindow):
         self.version_retries = 0
         self.max_retries = 5
         
+        self.launch_hide_timer = None
+        
         self.load_versions()
         
         if not os.path.exists(self.minecraft_directory):
@@ -900,7 +902,15 @@ class NovaLauncher(QMainWindow):
         settings_dialog.exec_()
     
     def load_versions(self):
-        self.progress_label.setText("Loading versions...")
+        # Disable combobox and show loading text
+        self.version_combo.setEnabled(False)
+        self.version_combo.clear() # Clear previous items if any
+        self.version_combo.setPlaceholderText("Getting version info...")
+
+        # Keep the hidden label updated as well
+        self.progress_label.setText("Loading versions...") 
+        
+        # Start thread
         self.version_thread = MinecraftVersionThread()
         self.version_thread.version_signal.connect(self.update_versions)
         self.version_thread.start()
@@ -915,6 +925,9 @@ class NovaLauncher(QMainWindow):
                 print(f"Retrying version load ({self.version_retries}/{self.max_retries})...")
                 QTimer.singleShot(3000, self.load_versions)
             return
+        
+        self.version_combo.setEnabled(True)
+        self.version_combo.setPlaceholderText("Select Minecraft version")
         
         self.version_retries = 0
         release_versions = []
@@ -1068,7 +1081,7 @@ class NovaLauncher(QMainWindow):
         )
         
         if reply == QMessageBox.Yes:
-            self.show_loading(is_launching=False, percentage=0)
+            self.show_loading(is_launching=False)
             self.install_minecraft(version_data)
             return False
         else:
@@ -1125,13 +1138,18 @@ class NovaLauncher(QMainWindow):
             self.play_button.setText(new_text)
     
     def update_progress(self, percentage, status):
-        self.progress_label.setText(status)
-        
-        if self.loading_container.isVisible() and self.status_label.text().startswith("DOWNLOADING"):
-            self.status_label.setText(f"DOWNLOADING {percentage}%")
-            
-            if percentage >= 100:
-                QTimer.singleShot(2000, self.hide_loading)
+        if self.loading_container.isVisible():
+            display_text = status
+            if percentage > 0 and (
+                "download" in status.lower() or 
+                "install" in status.lower() or 
+                "extract" in status.lower() or
+                "verifying" in status.lower()
+                ): 
+                display_text = f"{status} {percentage}%"
+            self.status_label.setText(display_text)
+
+        self.progress_label.setText(f"{status} - {percentage}%")
     
     def installation_complete(self, success, message):
         self.progress_label.setText(message)
@@ -1167,22 +1185,28 @@ class NovaLauncher(QMainWindow):
         else:
             QMessageBox.critical(self, "Installation Error", message)
     
-    def show_loading(self, is_launching=True, percentage=0):
+    def show_loading(self, is_launching=True):
         self.play_button.hide()
         
         if is_launching:
-            self.status_label.setText("LAUNCHING")
+            self.status_label.setText("Game will launch soon...")
+            if self.launch_hide_timer and self.launch_hide_timer.isActive():
+                self.launch_hide_timer.stop()
+            self.launch_hide_timer = QTimer(self)
+            self.launch_hide_timer.setSingleShot(True)
+            self.launch_hide_timer.timeout.connect(self.hide_loading)
+            self.launch_hide_timer.start(15000)
         else:
-            self.status_label.setText(f"DOWNLOADING {percentage}%")
+            self.status_label.setText("Starting installation...")
         
         self.loading_container.show()
         
         self.spinner_timer.start(50)
-        
-        if is_launching:
-            QTimer.singleShot(10000, self.hide_loading)
     
     def hide_loading(self):
+        if self.launch_hide_timer and self.launch_hide_timer.isActive():
+            self.launch_hide_timer.stop()
+            
         self.spinner_timer.stop()
         
         self.loading_container.hide()
