@@ -32,7 +32,7 @@ DEFAULT_SETTINGS = {
     "java_path": "",
     "show_fabric": True,  # Fabric göster/gizle ayarı
     "show_forge": True,   # Forge göster/gizle ayarı
-    "show_snapshots": True # Snapshot göster/gizle ayarı
+    "show_snapshots": False # Snapshot göster/gizle ayarı (Varsayılan: Gizli)
 }
 
 # Simgelerin konumu
