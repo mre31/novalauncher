@@ -588,6 +588,12 @@ class SettingsDialog(QDialog):
 class NovaLauncher(QMainWindow):
     def __init__(self):
         super().__init__()
+        if getattr(sys, 'frozen', False):
+            self._install_dir = os.path.dirname(sys.executable)
+        else:
+            self._install_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            
+        self.settings_file_path = os.path.join(self._install_dir, "nova_launcher_settings.json") 
         
         self.settings = self.load_settings()
         
@@ -1324,8 +1330,8 @@ class NovaLauncher(QMainWindow):
         }
         
         try:
-            if os.path.exists(SETTINGS_FILE):
-                with open(SETTINGS_FILE, 'r') as f:
+            if os.path.exists(self.settings_file_path):
+                with open(self.settings_file_path, 'r') as f:
                     loaded_settings = json.load(f)
                     settings.update(loaded_settings)
         except Exception as e:
@@ -1349,7 +1355,7 @@ class NovaLauncher(QMainWindow):
             if not os.path.exists(self.minecraft_directory):
                 os.makedirs(self.minecraft_directory)
             
-            with open(SETTINGS_FILE, 'w') as f:
+            with open(self.settings_file_path, 'w') as f:
                 json.dump(settings, f)
         except Exception as e:
             pass
