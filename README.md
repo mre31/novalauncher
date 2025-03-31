@@ -37,7 +37,7 @@ A simple and user-friendly Minecraft launcher built with Python and PyQt5.
 ## Settings File Location
 
 User settings (username, paths, version visibility, etc.) are stored in:
-`%APPDATA%\.novainstaller\nova_launcher_settings.json`
+`%APPDATA%\.novalauncher\nova_launcher_settings.json`
 
 ## Building from Source (Development)
 
