@@ -15,7 +15,7 @@ import traceback
 import glob
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                            QLabel, QPushButton, QComboBox, QProgressBar, 
-                           QMessageBox, QFileDialog, QGroupBox, QHBoxLayout,
+                           QMessageBox, QFileDialog, QGroupBox, QHBoxLayout, QGridLayout,
                            QDialog, QSpinBox, QSlider, QTabWidget, QInputDialog,
                            QFrame, QLineEdit, QCheckBox)
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QSize, QTimer, QByteArray
@@ -724,12 +724,14 @@ class NovaLauncher(QMainWindow):
         self.setCentralWidget(main_widget)
         
         top_bar = QWidget()
-        top_layout = QHBoxLayout()
+        top_layout = QGridLayout()
         top_layout.setContentsMargins(0, 0, 0, 0)
+        top_layout.setSpacing(10)
         top_bar.setLayout(top_layout)
         
         user_widget = QWidget()
         user_widget.setObjectName("userWidget")
+        user_widget.setMaximumWidth(200)
         user_widget.setStyleSheet("""
             #userWidget {
                 background-color: #2d2d2d;
@@ -777,6 +779,7 @@ class NovaLauncher(QMainWindow):
         
         user_layout.addWidget(self.avatar_label)
         user_layout.addWidget(self.user_label)
+        top_layout.addWidget(user_widget, 0, 0, Qt.AlignLeft)
         
         self.header_label = QLabel()
         self.header_label.setAlignment(Qt.AlignCenter)
@@ -789,6 +792,7 @@ class NovaLauncher(QMainWindow):
             self.header_label.setText(APP_NAME)
             self.header_label.setObjectName("titleLabel")
             self.header_label.setFont(QFont("Segoe UI", 28, QFont.Bold))
+        top_layout.addWidget(self.header_label, 0, 1, Qt.AlignCenter)
         
         settings_button = QPushButton("⚙️")
         settings_button.setObjectName("settingsButton")
@@ -813,11 +817,11 @@ class NovaLauncher(QMainWindow):
         settings_button.setToolTip("Settings")
         settings_button.clicked.connect(self.open_settings)
         
-        top_layout.addWidget(user_widget)
-        top_layout.addStretch(1)
-        top_layout.addWidget(self.header_label)
-        top_layout.addStretch(1)
-        top_layout.addWidget(settings_button)
+        top_layout.addWidget(settings_button, 0, 2, Qt.AlignRight)
+        
+        top_layout.setColumnStretch(0, 1)
+        top_layout.setColumnStretch(1, 0)
+        top_layout.setColumnStretch(2, 1)
         
         main_layout.addWidget(top_bar)
         

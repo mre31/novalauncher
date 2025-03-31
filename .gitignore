@@ -24,7 +24,7 @@ MANIFEST
 # PyInstaller
 build/
 dist/
-*.spec
+output/
 
 # Environments
 .env
