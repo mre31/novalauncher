@@ -1,5 +1,5 @@
 #define MyAppName "Nova Launcher"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.1.0"
 #define MyAppPublisher "NovaWeb"
 #define MyAppExeName "NovaLauncher.exe"
 #define SourceDir "dist"
