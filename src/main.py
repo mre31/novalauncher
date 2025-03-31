@@ -522,8 +522,11 @@ class SettingsDialog(QDialog):
         self.fabric_checkbox.setChecked(self.parent.show_fabric)
         self.forge_checkbox = QCheckBox("Show Forge Versions")
         self.forge_checkbox.setChecked(self.parent.show_forge)
+        self.snapshot_checkbox = QCheckBox("Show Snapshot Versions")
+        self.snapshot_checkbox.setChecked(self.parent.show_snapshots)
         version_options_layout.addWidget(self.fabric_checkbox)
         version_options_layout.addWidget(self.forge_checkbox)
+        version_options_layout.addWidget(self.snapshot_checkbox)
         version_options_group.setLayout(version_options_layout)
 
         # Add widgets to general tab
@@ -665,8 +668,9 @@ class SettingsDialog(QDialog):
             self.parent.java_path = java_path_text
             
         self.parent.ram_allocation = self.ram_spin.value() * 1024
-        self.parent.show_fabric = self.fabric_checkbox.isChecked() # Save checkbox state
-        self.parent.show_forge = self.forge_checkbox.isChecked() # Save checkbox state
+        self.parent.show_fabric = self.fabric_checkbox.isChecked()
+        self.parent.show_forge = self.forge_checkbox.isChecked()
+        self.parent.show_snapshots = self.snapshot_checkbox.isChecked()
         
         # Update UI elements in the main window
         self.parent.user_label.setText(self.parent.username)
@@ -694,6 +698,7 @@ class NovaLauncher(QMainWindow):
         self.java_path = self.settings.get("java_path", DEFAULT_SETTINGS["java_path"])
         self.show_fabric = self.settings.get("show_fabric", DEFAULT_SETTINGS["show_fabric"])
         self.show_forge = self.settings.get("show_forge", DEFAULT_SETTINGS["show_forge"])
+        self.show_snapshots = self.settings.get("show_snapshots", DEFAULT_SETTINGS["show_snapshots"])
         
         # Request username if not set
         if not self.username:
@@ -847,36 +852,33 @@ class NovaLauncher(QMainWindow):
         self.avatar_label = QLabel()
         self.avatar_label.setFixedSize(26, 26)
         
-        # Avatar çizimi
-        avatar_pixmap = QPixmap(26, 26)
-        avatar_pixmap.fill(Qt.transparent)
-        
-        painter = QPainter(avatar_pixmap)
-        painter.setRenderHint(QPainter.Antialiasing)
-        
-        # Yeşil daire
-        painter.setBrush(QColor(PRIMARY_COLOR))
-        painter.setPen(Qt.NoPen)
-        painter.drawEllipse(0, 0, 26, 26)
-        
-        # Kullanıcı silüeti
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor(255, 255, 255))
-        
-        # Baş
-        painter.drawEllipse(9, 4, 8, 8)
-        
-        # Gövde
-        path = QPainterPath()
-        path.moveTo(13, 12)
-        path.lineTo(17, 22)
-        path.lineTo(9, 22)
-        path.lineTo(13, 12)
-        painter.drawPath(path)
-        
-        painter.end()
-        
-        self.avatar_label.setPixmap(avatar_pixmap)
+        # Load creeper avatar
+        creeper_path = os.path.join(RESOURCES_DIR, "creeper.jpg")
+        if os.path.exists(creeper_path):
+            avatar_pixmap = QPixmap(creeper_path)
+            # Scale pixmap smoothly keeping aspect ratio
+            self.avatar_label.setPixmap(avatar_pixmap.scaled(26, 26, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        else:
+            print(f"Warning: Avatar image not found at {creeper_path}. Drawing default.")
+            # Fallback to drawing default avatar if image is missing
+            avatar_pixmap = QPixmap(26, 26)
+            avatar_pixmap.fill(Qt.transparent)
+            painter = QPainter(avatar_pixmap)
+            painter.setRenderHint(QPainter.Antialiasing)
+            painter.setBrush(QColor(PRIMARY_COLOR))
+            painter.setPen(Qt.NoPen)
+            painter.drawEllipse(0, 0, 26, 26)
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor(255, 255, 255))
+            painter.drawEllipse(9, 4, 8, 8)
+            path = QPainterPath()
+            path.moveTo(13, 12)
+            path.lineTo(17, 22)
+            path.lineTo(9, 22)
+            path.lineTo(13, 12)
+            painter.drawPath(path)
+            painter.end()
+            self.avatar_label.setPixmap(avatar_pixmap)
         
         # Kullanıcı adı
         self.user_label = QLabel(self.username)
@@ -888,11 +890,21 @@ class NovaLauncher(QMainWindow):
         user_layout.addWidget(self.avatar_label)
         user_layout.addWidget(self.user_label)
         
-        # -- Nova Launcher başlık (orta) --
-        title_label = QLabel(APP_NAME)
-        title_label.setObjectName("titleLabel")
-        title_label.setAlignment(Qt.AlignCenter)
-        title_label.setFont(QFont("Segoe UI", 28, QFont.Bold))
+        # -- Header Image (orta) --
+        self.header_label = QLabel()
+        self.header_label.setAlignment(Qt.AlignCenter)
+        header_path = os.path.join(RESOURCES_DIR, "header.png")
+        if os.path.exists(header_path):
+            header_pixmap = QPixmap(header_path)
+            # Optionally scale header if needed, e.g., to height 40
+            header_pixmap = header_pixmap.scaledToHeight(40, Qt.SmoothTransformation)
+            self.header_label.setPixmap(header_pixmap)
+        else:
+            # Fallback to text if image is missing
+            print(f"Warning: Header image not found at {header_path}. Using text title.")
+            self.header_label.setText(APP_NAME)
+            self.header_label.setObjectName("titleLabel")
+            self.header_label.setFont(QFont("Segoe UI", 28, QFont.Bold))
         
         # -- Ayarlar butonu (sağ taraf) --
         settings_button = QPushButton("⚙️")
@@ -921,7 +933,7 @@ class NovaLauncher(QMainWindow):
         # Tüm öğeleri üst bara ekle
         top_layout.addWidget(user_widget)
         top_layout.addStretch(1)
-        top_layout.addWidget(title_label)
+        top_layout.addWidget(self.header_label) # Use header label here
         top_layout.addStretch(1)
         top_layout.addWidget(settings_button)
         
@@ -1034,40 +1046,50 @@ class NovaLauncher(QMainWindow):
         
         self.version_retries = 0  # Reset retry counter on success
         release_versions = []
+        snapshot_versions = []
         processed_versions = [] # Store tuples of (display_name, version_id, type)
         
-        # Get vanilla release versions first
+        # Separate releases and snapshots (if shown)
         for version in versions:
-            if version.get("type") == "release":
+            version_type = version.get("type")
+            if version_type == "release":
                 release_versions.append(version)
+            elif version_type == "snapshot" and self.show_snapshots: # Check setting here
+                snapshot_versions.append(version)
         
-        # Sort releases by release time, newest first
+        # Sort releases and snapshots separately by release time, newest first
         release_versions.sort(key=lambda x: x.get("releaseTime", ""), reverse=True)
+        snapshot_versions.sort(key=lambda x: x.get("releaseTime", ""), reverse=True)
 
-        # Add Vanilla and Fabric versions
-        for version in release_versions:
+        # Combine lists (snapshots first if shown)
+        combined_versions = snapshot_versions + release_versions
+
+        # Add Vanilla, Fabric and Forge versions based on combined list
+        for version in combined_versions:
             vanilla_id = version.get("id")
             if not vanilla_id: continue
+            
+            # Determine display name prefix for snapshots
+            display_name_prefix = "[S] " if version.get("type") == "snapshot" else ""
 
             # Add Vanilla entry
-            processed_versions.append((vanilla_id, vanilla_id, "vanilla"))
+            processed_versions.append((f"{display_name_prefix}{vanilla_id}", vanilla_id, "vanilla"))
 
-            # Add Fabric entry (without calling get_latest_loader_version)
-            if self.show_fabric: # Check setting before adding
-                fabric_display_name = f"Fabric {vanilla_id}"
+            # Add Fabric entry only if show_fabric is enabled AND it's a release version
+            if self.show_fabric and version.get("type") == "release": 
+                fabric_display_name = f"Fabric {vanilla_id}" # No prefix for Fabric/Forge releases
                 # Store BASE vanilla ID and type "fabric" for later use
                 processed_versions.append((fabric_display_name, vanilla_id, "fabric"))
 
-            # Try to get and add Forge entry
-            if self.show_forge: # Check setting before adding
+            # Try to get and add Forge entry only if show_forge is enabled AND it's a release version
+            if self.show_forge and version.get("type") == "release":
                 try:
                     forge_version_str = forge.find_forge_version(vanilla_id)
                     if forge_version_str:
-                        forge_display_name = f"Forge {vanilla_id}"
+                        forge_display_name = f"Forge {vanilla_id}" # No prefix for Fabric/Forge releases
                         # Store base vanilla ID, type 'forge', and the specific forge version string
                         processed_versions.append((forge_display_name, vanilla_id, "forge", forge_version_str))
                 except Exception as e:
-                    # print(f"Could not get Forge version for {vanilla_id}: {e}") # Optional debug
                     pass
 
         # Populate the combo box
@@ -1515,7 +1537,8 @@ class NovaLauncher(QMainWindow):
             "ram_allocation": DEFAULT_SETTINGS["ram_allocation"],
             "java_path": DEFAULT_SETTINGS["java_path"],
             "show_fabric": DEFAULT_SETTINGS["show_fabric"],
-            "show_forge": DEFAULT_SETTINGS["show_forge"]
+            "show_forge": DEFAULT_SETTINGS["show_forge"],
+            "show_snapshots": DEFAULT_SETTINGS["show_snapshots"]
         }
         
         try:
@@ -1537,7 +1560,8 @@ class NovaLauncher(QMainWindow):
             "ram_allocation": self.ram_allocation,
             "java_path": self.java_path,
             "show_fabric": self.show_fabric,
-            "show_forge": self.show_forge
+            "show_forge": self.show_forge,
+            "show_snapshots": self.show_snapshots
         }
         
         try:

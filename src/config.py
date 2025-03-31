@@ -31,7 +31,8 @@ DEFAULT_SETTINGS = {
     "ram_allocation": 2048,
     "java_path": "",
     "show_fabric": True,  # Fabric göster/gizle ayarı
-    "show_forge": True   # Forge göster/gizle ayarı
+    "show_forge": True,   # Forge göster/gizle ayarı
+    "show_snapshots": True # Snapshot göster/gizle ayarı
 }
 
 # Simgelerin konumu
