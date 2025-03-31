@@ -14,8 +14,8 @@ A simple and user-friendly Minecraft launcher built with Python and PyQt5.
 3. Follow the on-screen instructions:
     - A desktop shortcut can be created (optional, enabled by default).
     - **Clean Install (Optional):** You can choose to perform a clean install, which will **delete your existing `.minecraft` folder** (`%APPDATA%\.minecraft`). **Use this option with extreme caution, as it will delete all your worlds, mods, resource packs, and settings within that folder.** This option is disabled by default.
-4. The launcher will be installed to `%APPDATA%\.novainstaller`.
-5. Launch the application from the desktop shortcut (if created) or by finding it in your user's AppData\Roaming\.novainstaller directory.
+4. The launcher will be installed to `%APPDATA%\.novalauncher`.
+5. Launch the application from the desktop shortcut (if created) or by finding it in your user's AppData\Roaming\.novalauncher directory.
 
 ## Requirements
 

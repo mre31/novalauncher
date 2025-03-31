@@ -3,7 +3,7 @@
 #define MyAppPublisher "NovaWeb"
 #define MyAppExeName "NovaLauncher.exe"
 #define SourceDir "dist"
-#define MyAppInstallDirName ".novainstaller"
+#define MyAppInstallDirName ".novalauncher"
 
 [Setup]
 AppId={{F5A1B2C3-D4E5-F6A7-B8C9-D0E1F2A3B4C5}}
