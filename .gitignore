@@ -55,6 +55,8 @@ desktop.ini
 
 # Log dosyaları
 *.log
+logs/
+data/
 
 # Geçici dosyalar
 *.tmp
