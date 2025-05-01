@@ -299,16 +299,23 @@ class UserInfoDialog(QDialog):
 
 class SettingsDialog(QDialog):
     def __init__(self, parent=None):
-        super().__init__(parent)
+        super().__init__(parent, Qt.FramelessWindowHint)
         self.parent = parent
         self.setWindowTitle("Settings")
         self.setMinimumSize(600, 400)
         self.setMaximumSize(600, 400)
         
+        # Pencere taşıma için gereken değişkenler
+        self.dragging = False
+        self.offset = None
+        
         self.setStyleSheet("""
             QDialog {
                 background-color: #2d2d2d;
                 color: #e0e0e0;
+            }
+            #titleBar {
+                background-color: #1e1e1e;
             }
             QTabWidget::pane { 
                 border: 1px solid #3d3d3d;
@@ -377,6 +384,27 @@ class SettingsDialog(QDialog):
             QPushButton#cancelButton:hover {
                 background-color: #4d4d4d;
             }
+            QPushButton#minimizeBtn, QPushButton#closeBtn {
+                background-color: transparent;
+                color: #dddddd;
+                border: none;
+                font-size: 16px;
+                font-weight: bold;
+                padding: 0px;
+                margin: 0px;
+                border-radius: 0px;
+            }
+            QPushButton#minimizeBtn:hover {
+                background-color: #3d3d3d;
+                color: #ffffff;
+            }
+            QPushButton#closeBtn:hover {
+                background-color: #c42b1c;
+                color: #ffffff;
+            }
+            QCheckBox {
+                color: #e0e0e0;
+            }
         """)
         
         self.setup_ui()
@@ -385,9 +413,105 @@ class SettingsDialog(QDialog):
             self.setWindowIcon(QIcon(LOGO_PATH))
     
     def setup_ui(self):
+        main_widget = QWidget()
         main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(20, 20, 20, 20)
-        main_layout.setSpacing(15)
+        main_layout.setContentsMargins(0, 0, 0, 0) 
+        main_layout.setSpacing(0)
+        self.setLayout(main_layout)
+        
+        # Özel başlık çubuğu
+        title_bar = QWidget()
+        title_bar.setObjectName("titleBar")
+        title_bar.setFixedHeight(35)
+        
+        title_layout = QHBoxLayout()
+        title_layout.setContentsMargins(10, 0, 0, 0)
+        title_layout.setSpacing(5)
+        title_bar.setLayout(title_layout)
+        
+        # Logo ve başlık
+        logo_label = QLabel()
+        logo_label.setFixedSize(20, 20)
+        logo_label.setStyleSheet("background-color: #1e1e1e;")
+        if os.path.exists(LOGO_PATH):
+            logo_pixmap = QPixmap(LOGO_PATH)
+            logo_label.setPixmap(logo_pixmap.scaled(20, 20, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        
+        title_label = QLabel("Settings")
+        title_label.setStyleSheet("background-color: #1e1e1e; color: #e0e0e0; font-weight: bold;")
+        
+        # Window control butonları
+        minimize_btn = QPushButton("―")
+        minimize_btn.setObjectName("minimizeBtn")
+        minimize_btn.setFixedSize(45, 35)
+        minimize_btn.setFont(QFont("Arial", 12, QFont.Bold))
+        minimize_btn.clicked.connect(self.showMinimized)
+        minimize_btn.setStyleSheet("""
+            QPushButton#minimizeBtn {
+                background-color: transparent;
+                color: #dddddd;
+                border: none;
+                font-size: 16px;
+                font-weight: bold;
+                padding: 0px;
+                margin: 0px;
+                border-radius: 0px;
+            }
+            QPushButton#minimizeBtn:hover {
+                background-color: #3d3d3d;
+                color: #ffffff;
+            }
+        """)
+        
+        close_btn = QPushButton("×")
+        close_btn.setObjectName("closeBtn")
+        close_btn.setFixedSize(45, 35)
+        close_btn.setFont(QFont("Arial", 14, QFont.Bold))
+        close_btn.clicked.connect(self.reject)
+        close_btn.setStyleSheet("""
+            QPushButton#closeBtn {
+                background-color: transparent;
+                color: #dddddd;
+                border: none;
+                font-size: 16px;
+                font-weight: bold;
+                padding: 0px;
+                margin: 0px;
+                border-radius: 0px;
+            }
+            QPushButton#closeBtn:hover {
+                background-color: #c42b1c;
+                color: #ffffff;
+            }
+        """)
+        
+        # Window control butonlarını tek bir widget içine koy
+        window_controls = QWidget()
+        window_controls_layout = QHBoxLayout()
+        window_controls_layout.setContentsMargins(0, 0, 0, 0)
+        window_controls_layout.setSpacing(0)
+        window_controls.setLayout(window_controls_layout)
+        
+        window_controls_layout.addWidget(minimize_btn)
+        window_controls_layout.addWidget(close_btn)
+        
+        # Title bar düzeni
+        title_layout.addWidget(logo_label)
+        title_layout.addSpacing(5)
+        title_layout.addWidget(title_label)
+        title_layout.addStretch()
+        title_layout.addWidget(window_controls)
+        
+        # Ana içerik alanı
+        content_widget = QWidget()
+        content_layout = QVBoxLayout()
+        content_layout.setContentsMargins(20, 20, 20, 20)
+        content_layout.setSpacing(15)
+        content_widget.setLayout(content_layout)
+        
+        # Title bar ve içerik alanını ekle
+        main_layout.addWidget(title_bar)
+        main_layout.addWidget(content_widget)
         
         tab_widget = QTabWidget()
         
@@ -403,7 +527,7 @@ class SettingsDialog(QDialog):
         dir_label = QLabel("Minecraft Directory:")
         dir_label.setMinimumWidth(120)
         self.directory_label = QLabel(self.parent.minecraft_directory)
-        self.directory_label.setStyleSheet("font-size: 13px; color: #666666; background-color: #f9f9f9; padding: 5px; border-radius: 3px;")
+        self.directory_label.setStyleSheet("font-size: 13px; color: #aaaaaa; background-color: #3d3d3d; padding: 5px; border-radius: 3px;")
         directory_button = QPushButton("Select")
         directory_button.setMaximumWidth(80)
         directory_button.clicked.connect(self.select_directory)
@@ -465,7 +589,7 @@ class SettingsDialog(QDialog):
         java_label = QLabel("Java Path:")
         java_label.setMinimumWidth(120)
         self.java_path_label = QLabel(self.parent.java_path if self.parent.java_path else "System default")
-        self.java_path_label.setStyleSheet("font-size: 13px; color: #666666; background-color: #f9f9f9; padding: 5px; border-radius: 3px;")
+        self.java_path_label.setStyleSheet("font-size: 13px; color: #aaaaaa; background-color: #3d3d3d; padding: 5px; border-radius: 3px;")
         java_path_button = QPushButton("Select")
         java_path_button.setMaximumWidth(80)
         java_path_button.clicked.connect(self.select_java_path)
@@ -532,10 +656,26 @@ class SettingsDialog(QDialog):
         button_layout.addWidget(self.cancel_button)
         button_layout.addWidget(self.save_button)
         
-        main_layout.addWidget(tab_widget)
-        main_layout.addWidget(button_widget)
-        
-        self.setLayout(main_layout)
+        content_layout.addWidget(tab_widget)
+        content_layout.addWidget(button_widget)
+    
+    # Pencereyi taşıma fonksiyonları
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            # Eğer başlık çubuğuna tıklanmışsa
+            if event.y() <= 35:  # 35 piksel başlık çubuğu yüksekliği
+                self.dragging = True
+                self.offset = event.globalPos() - self.pos()
+                event.accept()
+    
+    def mouseMoveEvent(self, event):
+        if event.buttons() & Qt.LeftButton and self.dragging:
+            self.move(event.globalPos() - self.offset)
+            event.accept()
+    
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.dragging = False
     
     def select_directory(self):
         directory = QFileDialog.getExistingDirectory(
@@ -600,6 +740,7 @@ class NovaLauncher(QMainWindow):
         self.minecraft_directory = self.settings.get("minecraft_directory", DEFAULT_MINECRAFT_DIR)
         self.username = self.settings.get("username", "")
         self.selected_version = self.settings.get("last_used_version")
+        self.selected_version_type = self.settings.get("last_version_type")
         self.ram_allocation = self.settings.get("ram_allocation", DEFAULT_SETTINGS["ram_allocation"])
         self.java_path = self.settings.get("java_path", DEFAULT_SETTINGS["java_path"])
         self.show_fabric = self.settings.get("show_fabric", DEFAULT_SETTINGS["show_fabric"])
@@ -616,6 +757,9 @@ class NovaLauncher(QMainWindow):
         
         self.setWindowTitle(APP_NAME)
         self.setMinimumSize(800, 250)
+        
+        # Kenarlığı kaldır, frameless pencere yap
+        self.setWindowFlags(Qt.FramelessWindowHint)
         
         if os.path.exists(LOGO_PATH):
             self.setWindowIcon(QIcon(LOGO_PATH))
@@ -636,12 +780,22 @@ class NovaLauncher(QMainWindow):
                 os.makedirs(self.minecraft_directory)
             except Exception as e:
                 print(f"Could not create Minecraft directory: {str(e)}")
+                
+        # Pencere taşıma için gereken değişkenler
+        self.dragging = False
+        self.offset = None
     
     def setup_dark_theme(self):
         self.setStyleSheet("""
             QMainWindow, QWidget {
                 background-color: #2d2d2d;
                 color: #e0e0e0;
+            }
+            #titleBar {
+                background-color: #1e1e1e;
+            }
+            #contentWidget {
+                background-color: #2d2d2d;
             }
             QGroupBox {
                 border: 1px solid #3d3d3d;
@@ -705,6 +859,24 @@ class NovaLauncher(QMainWindow):
             QPushButton#playButton:pressed {
                 background-color: #3d6b2c;
             }
+            QPushButton#minimizeBtn, QPushButton#closeBtn {
+                background-color: transparent;
+                color: #dddddd;
+                border: none;
+                font-size: 16px;
+                font-weight: bold;
+                padding: 0px;
+                margin: 0px;
+                border-radius: 0px;
+            }
+            QPushButton#minimizeBtn:hover {
+                background-color: #3d3d3d;
+                color: #ffffff;
+            }
+            QPushButton#closeBtn:hover {
+                background-color: #c42b1c;
+                color: #ffffff;
+            }
             QProgressBar {
                 border: 1px solid #5d5d5d;
                 border-radius: 4px;
@@ -720,11 +892,109 @@ class NovaLauncher(QMainWindow):
     def setup_ui(self):
         main_widget = QWidget()
         main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(20, 10, 20, 10)
-        main_layout.setSpacing(8)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
         main_widget.setLayout(main_layout)
         self.setCentralWidget(main_widget)
         
+        # Özel başlık çubuğu
+        title_bar = QWidget()
+        title_bar.setObjectName("titleBar")
+        title_bar.setFixedHeight(35)
+        
+        title_layout = QHBoxLayout()
+        title_layout.setContentsMargins(10, 0, 0, 0)
+        title_layout.setSpacing(5)
+        title_bar.setLayout(title_layout)
+        
+        # Logo ve başlık
+        logo_label = QLabel()
+        logo_label.setFixedSize(20, 20)
+        if os.path.exists(LOGO_PATH):
+            logo_pixmap = QPixmap(LOGO_PATH)
+            logo_label.setPixmap(logo_pixmap.scaled(20, 20, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        
+        title_label = QLabel(APP_NAME)
+        title_label.setStyleSheet("color: #e0e0e0; font-weight: bold;")
+        
+        # Window control butonları
+        minimize_btn = QPushButton("―")
+        minimize_btn.setObjectName("minimizeBtn")
+        minimize_btn.setFixedSize(45, 35)
+        minimize_btn.setFont(QFont("Arial", 12, QFont.Bold))
+        minimize_btn.clicked.connect(self.showMinimized)
+        minimize_btn.setStyleSheet("""
+            QPushButton#minimizeBtn {
+                background-color: transparent;
+                color: #dddddd;
+                border: none;
+                font-size: 16px;
+                font-weight: bold;
+                padding: 0px;
+                margin: 0px;
+                border-radius: 0px;
+            }
+            QPushButton#minimizeBtn:hover {
+                background-color: #3d3d3d;
+                color: #ffffff;
+            }
+        """)
+        
+        close_btn = QPushButton("×")
+        close_btn.setObjectName("closeBtn")
+        close_btn.setFixedSize(45, 35)
+        close_btn.setFont(QFont("Arial", 14, QFont.Bold))
+        close_btn.clicked.connect(self.close)
+        close_btn.setStyleSheet("""
+            QPushButton#closeBtn {
+                background-color: transparent;
+                color: #dddddd;
+                border: none;
+                font-size: 16px;
+                font-weight: bold;
+                padding: 0px;
+                margin: 0px;
+                border-radius: 0px;
+            }
+            QPushButton#closeBtn:hover {
+                background-color: #c42b1c;
+                color: #ffffff;
+            }
+        """)
+        
+        # Window control butonlarını tek bir widget içine koy
+        window_controls = QWidget()
+        window_controls_layout = QHBoxLayout()
+        window_controls_layout.setContentsMargins(0, 0, 0, 0)
+        window_controls_layout.setSpacing(0)
+        window_controls.setLayout(window_controls_layout)
+        
+        window_controls_layout.addWidget(minimize_btn)
+        window_controls_layout.addWidget(close_btn)
+        
+        # Title bar düzeni
+        title_layout.addWidget(logo_label)
+        logo_label.setStyleSheet("background-color: #1e1e1e;")
+        title_layout.addSpacing(5)
+        title_layout.addWidget(title_label)
+        title_label.setStyleSheet("background-color: #1e1e1e;")
+        title_layout.addStretch()
+        title_layout.addWidget(window_controls)
+        window_controls.setStyleSheet("background-color: #1e1e1e;")
+        
+        # Ana içerik alanı
+        content_widget = QWidget()
+        content_widget.setObjectName("contentWidget")
+        content_layout = QVBoxLayout()
+        content_layout.setContentsMargins(20, 20, 20, 20)
+        content_layout.setSpacing(10)
+        content_widget.setLayout(content_layout)
+        
+        # Title bar ve içerik alanını ekle
+        main_layout.addWidget(title_bar)
+        main_layout.addWidget(content_widget)
+        
+        # İçerik
         top_bar = QWidget()
         top_layout = QGridLayout()
         top_layout.setContentsMargins(0, 0, 0, 0)
@@ -825,13 +1095,13 @@ class NovaLauncher(QMainWindow):
         top_layout.setColumnStretch(1, 0)
         top_layout.setColumnStretch(2, 1)
         
-        main_layout.addWidget(top_bar)
+        content_layout.addWidget(top_bar)
         
         separator = QFrame()
         separator.setFrameShape(QFrame.HLine)
         separator.setFrameShadow(QFrame.Sunken)
         separator.setStyleSheet("background-color: #3d3d3d;")
-        main_layout.addWidget(separator)
+        content_layout.addWidget(separator)
         
         version_group = QGroupBox("Minecraft Version")
         version_layout = QVBoxLayout()
@@ -844,7 +1114,7 @@ class NovaLauncher(QMainWindow):
         version_layout.addWidget(QLabel("Select the Minecraft version you want to play:"))
         version_layout.addWidget(self.version_combo)
         
-        main_layout.addWidget(version_group)
+        content_layout.addWidget(version_group)
         
         self.play_button = QPushButton("PLAY")
         self.play_button.setObjectName("playButton")
@@ -853,7 +1123,7 @@ class NovaLauncher(QMainWindow):
         self.play_button.setMinimumWidth(250)
         self.play_button.setFont(QFont("Segoe UI", 16, QFont.Bold))
         
-        main_layout.addWidget(self.play_button, 0, Qt.AlignCenter)
+        content_layout.addWidget(self.play_button, 0, Qt.AlignCenter)
         
         self.loading_container = QFrame()
         self.loading_container.setObjectName("loadingContainer")
@@ -886,7 +1156,7 @@ class NovaLauncher(QMainWindow):
         self.loading_container.setLayout(loading_layout)
         self.loading_container.hide()
         
-        main_layout.addWidget(self.loading_container, 0, Qt.AlignCenter)
+        content_layout.addWidget(self.loading_container, 0, Qt.AlignCenter)
         
         self.spinner_angle = 0
         self.spinner_timer = QTimer()
@@ -896,7 +1166,31 @@ class NovaLauncher(QMainWindow):
         self.progress_label.setVisible(False)
         
         self.version_combo.currentIndexChanged.connect(self.update_selected_version)
-
+        
+    # Pencereyi taşıma fonksiyonları
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            # Eğer başlık çubuğuna tıklanmışsa
+            if event.y() <= 35:  # 35 piksel başlık çubuğu yüksekliği
+                self.dragging = True
+                self.offset = event.globalPos() - self.pos()
+                event.accept()
+    
+    def mouseMoveEvent(self, event):
+        if event.buttons() & Qt.LeftButton and self.dragging:
+            self.move(event.globalPos() - self.offset)
+            event.accept()
+    
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.dragging = False
+    
+    def toggle_maximize(self):
+        if self.isMaximized():
+            self.showNormal()
+        else:
+            self.showMaximized()
+    
     def open_settings(self):
         settings_dialog = SettingsDialog(self)
         settings_dialog.exec_()
@@ -985,23 +1279,22 @@ class NovaLauncher(QMainWindow):
              self.update_selected_version(0)
         elif self.selected_version:
             found_index = -1
+            stored_id_in_settings = self.settings.get("last_used_version")
+            stored_type_in_settings = self.settings.get("last_version_type")
+            
             for i in range(self.version_combo.count()):
                 item_data = self.version_combo.itemData(i)
-                stored_id_in_settings = self.settings.get("last_used_version")
                 current_item_id = item_data.get("id")
                 current_item_type = item_data.get("type")
                 
-                if stored_id_in_settings == current_item_id:
+                # Hem ID hem de tip eşleşiyorsa
+                if stored_id_in_settings == current_item_id and stored_type_in_settings == current_item_type:
                      found_index = i
                      break
-                elif stored_id_in_settings and (current_item_type == "fabric" or current_item_type == "forge"):
-                     try:
-                         base_from_saved = stored_id_in_settings.split('-')[-1]
-                         if base_from_saved == current_item_id:
-                             found_index = i
-                             break
-                     except:
-                         pass
+                # Yalnızca ID eşleşiyorsa ve tip belirtilmemişse (geriye dönük uyumluluk)
+                elif stored_id_in_settings == current_item_id and not stored_type_in_settings:
+                     found_index = i
+                     break
 
             if found_index >= 0:
                 self.version_combo.setCurrentIndex(found_index)
@@ -1014,6 +1307,7 @@ class NovaLauncher(QMainWindow):
             item_data = self.version_combo.itemData(index)
             if item_data:
                 self.selected_version = item_data.get("id")
+                self.selected_version_type = item_data.get("type")
                 self.save_settings()
     
     def open_minecraft_directory(self):
@@ -1350,6 +1644,7 @@ class NovaLauncher(QMainWindow):
             "minecraft_directory": DEFAULT_MINECRAFT_DIR,
             "username": "",
             "last_used_version": None,
+            "last_version_type": None,
             "ram_allocation": DEFAULT_SETTINGS["ram_allocation"],
             "java_path": DEFAULT_SETTINGS["java_path"],
             "show_fabric": DEFAULT_SETTINGS["show_fabric"],
@@ -1372,6 +1667,7 @@ class NovaLauncher(QMainWindow):
             "minecraft_directory": self.minecraft_directory,
             "username": self.username,
             "last_used_version": self.selected_version,
+            "last_version_type": self.selected_version_type,
             "ram_allocation": self.ram_allocation,
             "java_path": self.java_path,
             "show_fabric": self.show_fabric,
